@@ -15,7 +15,6 @@ Each sample is a stack trace (array of stack frames) captured at a point in time
 import sys
 import threading
 import time
-import traceback
 from typing import Optional, Callable, Dict, Any, List
 
 from debugpy.common import log
@@ -282,8 +281,9 @@ def get_profiler(on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = 
         return _profiler
 
 
-def start_profiling(sample_interval: float = 0.01, 
-                   on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, Any]:
+def start_profiling(sample_interval: float = 0.01,
+                    on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+                    ) -> Dict[str, Any]:
     """
     Start profiling the current process using sys.setprofile().
     
@@ -311,7 +311,6 @@ def stop_profiling() -> Dict[str, Any]:
 
 def is_profiling() -> bool:
     """Check if profiling is currently active."""
-    global _profiler
     with _profiler_lock:
         if _profiler is None:
             return False
