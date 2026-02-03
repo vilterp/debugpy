@@ -96,12 +96,12 @@ Added to `pydevd_schema.py`:
 - Events contain: `newFrames` (only new IDs) + `samples` (arrays of IDs)
 - Client maintains accumulated ID→frame map to reconstruct stacks
 
-### Using Dataclasses
+### Dataclasses instead of Dicts
 **Why**: Type safety, better IDE support, cleaner code
 **Dataclasses**:
 - `StackFrame`: Represents frame with file, line, function
 - `ProfilingResult`: Start/stop operation results
-- `ProfilingData`: Complete profiling data sent to callbacks
+- `SampleBatch`: Complete sample batch sent to callbacks
 
 ### Why sys.setprofile() instead of sys._current_frames()?
 1. **Official Python API**: `setprofile()` is the standard profiling mechanism

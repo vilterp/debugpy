@@ -1367,9 +1367,9 @@ class PyDevJsonCommandProcessor(object):
             sample_interval = getattr(args, 'sampleInterval', 1.0)
             
             # Set up callback to send profiling data events
-            def on_profiling_data(profiling_data):
+            def on_profiling_data(sample_batch):
                 try:
-                    # Convert ProfilingData dataclass to dict format for DAP
+                    # Convert SampleBatch dataclass to dict format for DAP
                     # Convert StackFrame dataclasses to dicts for newFrames
                     new_frames_dict = {
                         frame_id: {
@@ -1377,16 +1377,16 @@ class PyDevJsonCommandProcessor(object):
                             "line": frame.line,
                             "function": frame.function
                         }
-                        for frame_id, frame in profiling_data.newFrames.items()
+                        for frame_id, frame in sample_batch.newFrames.items()
                     }
                     
                     # Send profiling data event to client with frame deduplication
                     event_body = {
                         "newFrames": new_frames_dict,
-                        "samples": profiling_data.samples,
-                        "sampleCount": profiling_data.sampleCount,
-                        "timestamp": profiling_data.timestamp,
-                        "duration": profiling_data.duration,
+                        "samples": sample_batch.samples,
+                        "sampleCount": sample_batch.sampleCount,
+                        "timestamp": sample_batch.timestamp,
+                        "duration": sample_batch.duration,
                     }
                     event = pydevd_schema.PydevdProfilingDataEvent(body=event_body)
                     cmd = NetCommand(CMD_RETURN, 0, event, is_json=True)

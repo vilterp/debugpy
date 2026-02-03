@@ -41,8 +41,8 @@ class ProfilingResult:
 
 
 @dataclass
-class ProfilingData:
-    """Profiling data sent to the client."""
+class SampleBatch:
+    """Sample batch sent to the client."""
     newFrames: Dict[int, StackFrame]  # frame_id -> StackFrame
     samples: List[List[int]]  # List of stacks, each stack is list of frame IDs
     sampleCount: int
@@ -53,13 +53,13 @@ class ProfilingData:
 class Profiler:
     """Manages sampling profiling for the debugged process using sys.setprofile()."""
 
-    def __init__(self, on_data_callback: Optional[Callable[[ProfilingData], None]] = None):
+    def __init__(self, on_data_callback: Optional[Callable[[SampleBatch], None]] = None):
         """
         Initialize the profiler.
         
         Args:
             on_data_callback: Optional callback to invoke with profiling data.
-                             Called with a ProfilingData instance.
+                             Called with a SampleBatch instance.
         """
         self._is_profiling = False
         self._lock = threading.RLock()
@@ -323,8 +323,8 @@ class Profiler:
                         new_frames[frame_id] = self._frame_id_map[frame_id]
                         self._sent_frame_ids.add(frame_id)
             
-            # Create ProfilingData instance
-            profiling_data = ProfilingData(
+            # Create SampleBatch instance
+            sample_batch = SampleBatch(
                 newFrames=new_frames,
                 samples=samples,
                 sampleCount=len(samples),
@@ -332,7 +332,7 @@ class Profiler:
                 duration=duration_ms
             )
             
-            self._on_data_callback(profiling_data)
+            self._on_data_callback(sample_batch)
             
             # Reset batch start time for next batch
             self._batch_start_time = current_time
@@ -346,7 +346,7 @@ _profiler: Optional[Profiler] = None
 _profiler_lock = threading.RLock()
 
 
-def get_profiler(on_data_callback: Optional[Callable[[ProfilingData], None]] = None) -> Profiler:
+def get_profiler(on_data_callback: Optional[Callable[[SampleBatch], None]] = None) -> Profiler:
     """
     Get or create the global profiler instance.
     
@@ -367,7 +367,7 @@ def get_profiler(on_data_callback: Optional[Callable[[ProfilingData], None]] = N
 
 
 def start_profiling(sample_interval: float = 0.01,
-                    on_data_callback: Optional[Callable[[ProfilingData], None]] = None
+                    on_data_callback: Optional[Callable[[SampleBatch], None]] = None
                     ) -> ProfilingResult:
     """
     Start profiling the current process using sys.setprofile().

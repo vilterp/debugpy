@@ -152,7 +152,7 @@ The implementation uses Python dataclasses for type safety:
 
 - `StackFrame`: Represents a single stack frame with file, line, and function
 - `ProfilingResult`: Result of start/stop operations
-- `ProfilingData`: Complete profiling data sent to callbacks
+- `SampleBatch`: Complete sample batch sent to callbacks
 
 This provides better IDE support, type checking, and cleaner code compared to dictionaries.
 
