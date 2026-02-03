@@ -47,6 +47,7 @@ class ProfilingData:
     samples: List[List[int]]  # List of stacks, each stack is list of frame IDs
     sampleCount: int
     timestamp: float
+    duration: float  # Duration of sampling window in milliseconds
 
 
 class Profiler:
@@ -70,6 +71,7 @@ class Profiler:
         self._batch_size = 10  # Send samples in batches
         self._last_sample_time = 0
         self._current_frame = None  # Track the current frame for profiling
+        self._batch_start_time = 0  # Track when current batch started
         
         # Frame deduplication state
         self._frame_id_map: Dict[int, StackFrame] = {}  # frame_id -> StackFrame
@@ -97,6 +99,7 @@ class Profiler:
             self._should_stop.clear()
             self._samples_buffer = []
             self._last_sample_time = time.time()
+            self._batch_start_time = time.time()  # Track when batch started
             
             # Reset frame deduplication state when starting a new profiling session
             self._frame_id_map = {}
@@ -307,6 +310,10 @@ class Profiler:
             return
         
         try:
+            # Calculate duration of this batch in milliseconds
+            current_time = time.time()
+            duration_ms = (current_time - self._batch_start_time) * 1000
+            
             # Determine which frames in this batch are new (haven't been sent yet)
             new_frames: Dict[int, StackFrame] = {}
             for sample in samples:
@@ -321,10 +328,15 @@ class Profiler:
                 newFrames=new_frames,
                 samples=samples,
                 sampleCount=len(samples),
-                timestamp=time.time()
+                timestamp=current_time,
+                duration=duration_ms
             )
             
             self._on_data_callback(profiling_data)
+            
+            # Reset batch start time for next batch
+            self._batch_start_time = current_time
+            
         except Exception as e:
             log.exception("Error sending samples: {0}", e)
 

@@ -148,6 +148,13 @@ def test_profiling_data_format(pyfile, target, run):
         assert "samples" in body
         assert "sampleCount" in body
         assert "timestamp" in body
+        assert "duration" in body
+        
+        # Verify duration is a positive number
+        duration = body["duration"]
+        assert isinstance(duration, (int, float))
+        assert duration > 0, "Duration should be positive"
+        log.info("Duration: {0} ms", duration)
         
         # Verify newFrames is a dict mapping frame IDs to frame data
         new_frames = body["newFrames"]

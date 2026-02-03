@@ -17940,22 +17940,25 @@ class PydevdProfilingDataEventBody(BaseSchema):
         },
         "sampleCount": {"type": "integer", "description": "Number of samples in this batch"},
         "timestamp": {"type": "number", "description": "Timestamp when samples were collected"},
+        "duration": {"type": "number", "description": "Duration of the sampling window in milliseconds"},
     }
     __refs__ = set()
 
     __slots__ = list(__props__.keys()) + ["kwargs"]
 
-    def __init__(self, newFrames, samples, sampleCount, timestamp, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+    def __init__(self, newFrames, samples, sampleCount, timestamp, duration, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
         """
         :param object newFrames: New stack frames in this batch. Dictionary mapping frame ID to frame data.
         :param array samples: Array of stack trace samples. Each sample is an array of frame IDs.
         :param integer sampleCount: Number of samples in this batch
         :param number timestamp: Timestamp when samples were collected
+        :param number duration: Duration of the sampling window in milliseconds
         """
         self.newFrames = newFrames
         self.samples = samples
         self.sampleCount = sampleCount
         self.timestamp = timestamp
+        self.duration = duration
         self.kwargs = kwargs
 
     def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
@@ -17963,6 +17966,7 @@ class PydevdProfilingDataEventBody(BaseSchema):
         samples = self.samples
         sampleCount = self.sampleCount
         timestamp = self.timestamp
-        dct = {"newFrames": newFrames, "samples": samples, "sampleCount": sampleCount, "timestamp": timestamp}
+        duration = self.duration
+        dct = {"newFrames": newFrames, "samples": samples, "sampleCount": sampleCount, "timestamp": timestamp, "duration": duration}
         dct.update(self.kwargs)
         return dct

@@ -1386,6 +1386,7 @@ class PyDevJsonCommandProcessor(object):
                         "samples": profiling_data.samples,
                         "sampleCount": profiling_data.sampleCount,
                         "timestamp": profiling_data.timestamp,
+                        "duration": profiling_data.duration,
                     }
                     event = pydevd_schema.PydevdProfilingDataEvent(body=event_body)
                     cmd = NetCommand(CMD_RETURN, 0, event, is_json=True)

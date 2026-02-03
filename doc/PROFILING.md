@@ -35,6 +35,7 @@ Profiling data is sent as events with **frame deduplication** for efficiency. Ea
 
 1. **`newFrames`**: A dictionary mapping frame IDs to frame data. Only frames that haven't been sent before are included.
 2. **`samples`**: An array of call stacks, where each stack is an array of frame IDs (integers).
+3. **`duration`**: Duration of the sampling window in milliseconds (time from start of batch to send).
 
 This design minimizes data transfer by only sending each unique frame once per profiling session.
 
@@ -51,7 +52,8 @@ Example event:
     [12345, 99999]
   ],
   "sampleCount": 3,
-  "timestamp": 1234567890.123
+  "timestamp": 1234567890.123,
+  "duration": 150.5
 }
 ```
 
@@ -66,7 +68,8 @@ In subsequent events, if the same frames appear, only the frame IDs are sent:
     [12345, 67890]
   ],
   "sampleCount": 2,
-  "timestamp": 1234567890.456
+  "timestamp": 1234567890.456,
+  "duration": 100.2
 }
 ```
 
@@ -232,7 +235,8 @@ Sent periodically while profiling is active. Contains new stack frames and sampl
         [12345]
     ],
     "sampleCount": 2,
-    "timestamp": 1234567890.123
+    "timestamp": 1234567890.123,
+    "duration": 150.5
 }
 ```
 
@@ -241,6 +245,7 @@ Sent periodically while profiling is active. Contains new stack frames and sampl
 - `samples`: Array of call stacks. Each stack is an array of frame IDs (integers).
 - `sampleCount`: Number of samples in this batch.
 - `timestamp`: Unix timestamp when samples were collected.
+- `duration`: Duration of the sampling window in milliseconds (time from batch start to send).
 
 ## Testing
 
