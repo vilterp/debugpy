@@ -2,6 +2,8 @@
 
 This document describes the profiling support added to debugpy, which enables live profiling of Python applications during debug sessions.
 
+> **📝 VSCode Integration**: For information about integrating this feature into the Python extension for Visual Studio Code, see [VSCODE_INTEGRATION.md](../VSCODE_INTEGRATION.md) in the root directory.
+
 ## Overview
 
 The profiling feature allows developers to:
