@@ -1352,3 +1352,98 @@ class PyDevJsonCommandProcessor(object):
 
         response = pydevd_base_schema.build_response(request)
         return NetCommand(CMD_RETURN, 0, response, is_json=True)
+
+    def on_pydevdstartprofiling_request(self, py_db, request):
+        """
+        Handle startProfiling request from the client.
+        
+        :param PydevdStartProfilingRequest request:
+        """
+        try:
+            # Import profiling module here to avoid circular imports
+            from debugpy.server import profiling
+            
+            args = request.arguments  # : :type args: PydevdStartProfilingArguments
+            sample_interval = getattr(args, 'sampleInterval', 1.0)
+            
+            # Set up callback to send profiling data events
+            def on_profiling_data(sample_batch):
+                try:
+                    # Convert SampleBatch dataclass to dict format for DAP
+                    # Convert StackFrame dataclasses to dicts for newFrames
+                    new_frames_dict = {
+                        frame_id: {
+                            "file": frame.file,
+                            "line": frame.line,
+                            "function": frame.function
+                        }
+                        for frame_id, frame in sample_batch.newFrames.items()
+                    }
+                    
+                    # Send profiling data event to client with frame deduplication
+                    event_body = {
+                        "newFrames": new_frames_dict,
+                        "samples": sample_batch.samples,
+                        "sampleCount": sample_batch.sampleCount,
+                        "timestamp": sample_batch.timestamp,
+                        "duration": sample_batch.duration,
+                    }
+                    event = pydevd_schema.PydevdProfilingDataEvent(body=event_body)
+                    cmd = NetCommand(CMD_RETURN, 0, event, is_json=True)
+                    py_db.writer.add_command(cmd)
+                except Exception as e:
+                    pydev_log.exception("Error sending profiling data event: %s", e)
+            
+            result = profiling.start_profiling(
+                sample_interval=sample_interval,
+                on_data_callback=on_profiling_data
+            )
+            
+            # Convert ProfilingResult dataclass to dict
+            body = {"status": result.status}
+            response = pydevd_base_schema.build_response(request, kwargs={"body": body})
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)
+            
+        except Exception as e:
+            pydev_log.exception("Error starting profiling: %s", e)
+            response = pydevd_base_schema.build_response(
+                request,
+                kwargs={
+                    "body": {"status": "error"},
+                    "success": False,
+                    "message": str(e),
+                },
+            )
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)
+    
+    def on_pydevdstopprofiling_request(self, py_db, request):
+        """
+        Handle stopProfiling request from the client.
+        
+        :param PydevdStopProfilingRequest request:
+        """
+        try:
+            # Import profiling module here to avoid circular imports
+            from debugpy.server import profiling
+            
+            result = profiling.stop_profiling()
+            
+            # Convert ProfilingResult dataclass to dict
+            body = {
+                "status": result.status,
+                "finalStats": result.finalStats or {}
+            }
+            response = pydevd_base_schema.build_response(request, kwargs={"body": body})
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)
+            
+        except Exception as e:
+            pydev_log.exception("Error stopping profiling: %s", e)
+            response = pydevd_base_schema.build_response(
+                request,
+                kwargs={
+                    "body": {"status": "error", "finalStats": {}},
+                    "success": False,
+                    "message": str(e),
+                },
+            )
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)

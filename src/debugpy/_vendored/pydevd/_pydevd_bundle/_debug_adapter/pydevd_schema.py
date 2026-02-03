@@ -17456,3 +17456,517 @@ class PydevdAuthorizeResponseBody(BaseSchema):
         }
         dct.update(self.kwargs)
         return dct
+
+
+# Profiling support schemas
+
+
+@register_request("pydevdStartProfiling")
+@register
+class PydevdStartProfilingRequest(BaseSchema):
+    """
+    Start profiling the debugged process.
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "seq": {
+            "type": "integer",
+            "description": "Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.",
+        },
+        "type": {"type": "string", "enum": ["request"]},
+        "command": {"type": "string", "enum": ["pydevdStartProfiling"]},
+        "arguments": {"type": "PydevdStartProfilingArguments"},
+    }
+    __refs__ = set(["arguments"])
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, seq=-1, arguments=None, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param string type:
+        :param string command:
+        :param integer seq: Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.
+        :param PydevdStartProfilingArguments arguments:
+        """
+        self.type = "request"
+        self.command = "pydevdStartProfiling"
+        self.seq = seq
+        if arguments is None:
+            self.arguments = PydevdStartProfilingArguments()
+        else:
+            self.arguments = (
+                PydevdStartProfilingArguments(update_ids_from_dap=update_ids_from_dap, **arguments)
+                if arguments.__class__ != PydevdStartProfilingArguments
+                else arguments
+            )
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        type = self.type  # noqa (assign to builtin)
+        command = self.command
+        seq = self.seq
+        arguments = self.arguments
+        dct = {
+            "type": type,
+            "command": command,
+            "seq": seq,
+        }
+        if arguments is not None:
+            dct["arguments"] = arguments.to_dict(update_ids_to_dap=update_ids_to_dap)
+        dct.update(self.kwargs)
+        return dct
+
+
+@register
+class PydevdStartProfilingArguments(BaseSchema):
+    """
+    Arguments for 'pydevdStartProfiling' request.
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "sampleInterval": {
+            "type": "number",
+            "description": "How often to sample stack traces in seconds (default: 0.01 = 10ms)",
+        }
+    }
+    __refs__ = set()
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, sampleInterval=0.01, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param number sampleInterval: How often to sample stack traces in seconds (default: 0.01 = 10ms)
+        """
+        self.sampleInterval = sampleInterval
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        sampleInterval = self.sampleInterval
+        dct = {"sampleInterval": sampleInterval}
+        dct.update(self.kwargs)
+        return dct
+
+
+@register_response("pydevdStartProfiling")
+@register
+class PydevdStartProfilingResponse(BaseSchema):
+    """
+    Response to 'pydevdStartProfiling' request.
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "seq": {
+            "type": "integer",
+            "description": "Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.",
+        },
+        "type": {"type": "string", "enum": ["response"]},
+        "request_seq": {"type": "integer", "description": "Sequence number of the corresponding request."},
+        "success": {
+            "type": "boolean",
+            "description": "Outcome of the request.\nIf True, the request was successful and the `body` attribute may contain the result of the request.\nIf the value is false, the attribute `message` contains the error in short form and the `body` may contain additional information (see `ErrorResponse.body.error`).",
+        },
+        "command": {"type": "string", "description": "The command requested."},
+        "message": {
+            "type": "string",
+            "description": "Contains the raw error in short form if `success` is false.\nThis raw error might be interpreted by the client and is not shown in the UI.\nSome predefined values exist.",
+            "_enum": ["cancelled", "notStopped"],
+            "enumDescriptions": ["the request was cancelled.", "the request may be retried once the adapter is in a 'stopped' state."],
+        },
+        "body": {"type": "PydevdStartProfilingResponseBody"},
+    }
+    __refs__ = set(["body"])
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, request_seq, success, command, body=None, seq=-1, message=None, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param string type:
+        :param integer request_seq: Sequence number of the corresponding request.
+        :param boolean success: Outcome of the request.
+        If True, the request was successful and the `body` attribute may contain the result of the request.
+        If the value is false, the attribute `message` contains the error in short form and the `body` may contain additional information (see `ErrorResponse.body.error`).
+        :param string command: The command requested.
+        :param integer seq: Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.
+        :param string message: Contains the raw error in short form if `success` is false.
+        This raw error might be interpreted by the client and is not shown in the UI.
+        Some predefined values exist.
+        :param PydevdStartProfilingResponseBody body:
+        """
+        self.type = "response"
+        self.request_seq = request_seq
+        self.success = success
+        self.command = command
+        self.seq = seq
+        self.message = message
+        if body is None:
+            self.body = PydevdStartProfilingResponseBody()
+        else:
+            self.body = (
+                PydevdStartProfilingResponseBody(update_ids_from_dap=update_ids_from_dap, **body)
+                if body.__class__ != PydevdStartProfilingResponseBody
+                else body
+            )
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        type = self.type  # noqa (assign to builtin)
+        request_seq = self.request_seq
+        success = self.success
+        command = self.command
+        seq = self.seq
+        message = self.message
+        body = self.body
+        dct = {
+            "type": type,
+            "request_seq": request_seq,
+            "success": success,
+            "command": command,
+            "seq": seq,
+        }
+        if message is not None:
+            dct["message"] = message
+        if body is not None:
+            dct["body"] = body.to_dict(update_ids_to_dap=update_ids_to_dap)
+        dct.update(self.kwargs)
+        return dct
+
+
+@register
+class PydevdStartProfilingResponseBody(BaseSchema):
+    """
+    "body" of PydevdStartProfilingResponse
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {"status": {"type": "string", "description": "Status of the profiling start operation"}}
+    __refs__ = set()
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, status="started", update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param string status: Status of the profiling start operation
+        """
+        self.status = status
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        status = self.status
+        dct = {"status": status}
+        dct.update(self.kwargs)
+        return dct
+
+
+@register_request("pydevdStopProfiling")
+@register
+class PydevdStopProfilingRequest(BaseSchema):
+    """
+    Stop profiling the debugged process.
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "seq": {
+            "type": "integer",
+            "description": "Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.",
+        },
+        "type": {"type": "string", "enum": ["request"]},
+        "command": {"type": "string", "enum": ["pydevdStopProfiling"]},
+        "arguments": {"type": "PydevdStopProfilingArguments"},
+    }
+    __refs__ = set(["arguments"])
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, seq=-1, arguments=None, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param string type:
+        :param string command:
+        :param integer seq: Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.
+        :param PydevdStopProfilingArguments arguments:
+        """
+        self.type = "request"
+        self.command = "pydevdStopProfiling"
+        self.seq = seq
+        if arguments is None:
+            self.arguments = PydevdStopProfilingArguments()
+        else:
+            self.arguments = (
+                PydevdStopProfilingArguments(update_ids_from_dap=update_ids_from_dap, **arguments)
+                if arguments.__class__ != PydevdStopProfilingArguments
+                else arguments
+            )
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        type = self.type  # noqa (assign to builtin)
+        command = self.command
+        seq = self.seq
+        arguments = self.arguments
+        dct = {
+            "type": type,
+            "command": command,
+            "seq": seq,
+        }
+        if arguments is not None:
+            dct["arguments"] = arguments.to_dict(update_ids_to_dap=update_ids_to_dap)
+        dct.update(self.kwargs)
+        return dct
+
+
+@register
+class PydevdStopProfilingArguments(BaseSchema):
+    """
+    Arguments for 'pydevdStopProfiling' request.
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {}
+    __refs__ = set()
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """ """
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        dct = {}
+        dct.update(self.kwargs)
+        return dct
+
+
+@register_response("pydevdStopProfiling")
+@register
+class PydevdStopProfilingResponse(BaseSchema):
+    """
+    Response to 'pydevdStopProfiling' request.
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "seq": {
+            "type": "integer",
+            "description": "Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.",
+        },
+        "type": {"type": "string", "enum": ["response"]},
+        "request_seq": {"type": "integer", "description": "Sequence number of the corresponding request."},
+        "success": {
+            "type": "boolean",
+            "description": "Outcome of the request.\nIf True, the request was successful and the `body` attribute may contain the result of the request.\nIf the value is false, the attribute `message` contains the error in short form and the `body` may contain additional information (see `ErrorResponse.body.error`).",
+        },
+        "command": {"type": "string", "description": "The command requested."},
+        "message": {
+            "type": "string",
+            "description": "Contains the raw error in short form if `success` is false.\nThis raw error might be interpreted by the client and is not shown in the UI.\nSome predefined values exist.",
+            "_enum": ["cancelled", "notStopped"],
+            "enumDescriptions": ["the request was cancelled.", "the request may be retried once the adapter is in a 'stopped' state."],
+        },
+        "body": {"type": "PydevdStopProfilingResponseBody"},
+    }
+    __refs__ = set(["body"])
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, request_seq, success, command, body=None, seq=-1, message=None, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param string type:
+        :param integer request_seq: Sequence number of the corresponding request.
+        :param boolean success: Outcome of the request.
+        If True, the request was successful and the `body` attribute may contain the result of the request.
+        If the value is false, the attribute `message` contains the error in short form and the `body` may contain additional information (see `ErrorResponse.body.error`).
+        :param string command: The command requested.
+        :param integer seq: Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.
+        :param string message: Contains the raw error in short form if `success` is false.
+        This raw error might be interpreted by the client and is not shown in the UI.
+        Some predefined values exist.
+        :param PydevdStopProfilingResponseBody body:
+        """
+        self.type = "response"
+        self.request_seq = request_seq
+        self.success = success
+        self.command = command
+        self.seq = seq
+        self.message = message
+        if body is None:
+            self.body = PydevdStopProfilingResponseBody()
+        else:
+            self.body = (
+                PydevdStopProfilingResponseBody(update_ids_from_dap=update_ids_from_dap, **body)
+                if body.__class__ != PydevdStopProfilingResponseBody
+                else body
+            )
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        type = self.type  # noqa (assign to builtin)
+        request_seq = self.request_seq
+        success = self.success
+        command = self.command
+        seq = self.seq
+        message = self.message
+        body = self.body
+        dct = {
+            "type": type,
+            "request_seq": request_seq,
+            "success": success,
+            "command": command,
+            "seq": seq,
+        }
+        if message is not None:
+            dct["message"] = message
+        if body is not None:
+            dct["body"] = body.to_dict(update_ids_to_dap=update_ids_to_dap)
+        dct.update(self.kwargs)
+        return dct
+
+
+@register
+class PydevdStopProfilingResponseBody(BaseSchema):
+    """
+    "body" of PydevdStopProfilingResponse
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "status": {"type": "string", "description": "Status of the profiling stop operation"},
+        "finalStats": {"type": "object", "description": "Final profiling statistics"},
+    }
+    __refs__ = set()
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, status="stopped", finalStats=None, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param string status: Status of the profiling stop operation
+        :param object finalStats: Final profiling statistics
+        """
+        self.status = status
+        self.finalStats = finalStats if finalStats is not None else {}
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        status = self.status
+        finalStats = self.finalStats
+        dct = {"status": status, "finalStats": finalStats}
+        dct.update(self.kwargs)
+        return dct
+
+
+@register_event("pydevdProfilingData")
+@register
+class PydevdProfilingDataEvent(BaseSchema):
+    """
+    Event sent periodically during profiling with profiling samples.
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "seq": {
+            "type": "integer",
+            "description": "Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.",
+        },
+        "type": {"type": "string", "enum": ["event"]},
+        "event": {"type": "string", "enum": ["pydevdProfilingData"]},
+        "body": {"type": "PydevdProfilingDataEventBody"},
+    }
+    __refs__ = set(["body"])
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, body, seq=-1, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param string type:
+        :param string event:
+        :param integer seq: Sequence number of the message (also known as message ID). The `seq` for the first message sent by a client or debug adapter is 1, and for each subsequent message is 1 greater than the previous message sent by that actor. `seq` can be used to order requests, responses, and events, and to associate requests with their corresponding responses. For protocol messages of type `request` the sequence number can be used to cancel the request.
+        :param PydevdProfilingDataEventBody body:
+        """
+        self.type = "event"
+        self.event = "pydevdProfilingData"
+        self.seq = seq
+        if body is None:
+            self.body = PydevdProfilingDataEventBody()
+        else:
+            self.body = (
+                PydevdProfilingDataEventBody(update_ids_from_dap=update_ids_from_dap, **body)
+                if body.__class__ != PydevdProfilingDataEventBody
+                else body
+            )
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        type = self.type  # noqa (assign to builtin)
+        event = self.event
+        seq = self.seq
+        body = self.body
+        dct = {
+            "type": type,
+            "event": event,
+            "seq": seq,
+            "body": body.to_dict(update_ids_to_dap=update_ids_to_dap),
+        }
+        dct.update(self.kwargs)
+        return dct
+
+
+@register
+class PydevdProfilingDataEventBody(BaseSchema):
+    """
+    "body" of PydevdProfilingDataEvent
+
+    Note: automatically generated code. Do not edit manually.
+    """
+
+    __props__ = {
+        "newFrames": {
+            "type": "object",
+            "description": "New stack frames in this batch. Dictionary mapping frame ID to frame data. Only frames not previously sent are included."
+        },
+        "samples": {
+            "type": "array",
+            "description": "Array of stack trace samples. Each sample is an array of frame IDs (integers) from caller to callee."
+        },
+        "sampleCount": {"type": "integer", "description": "Number of samples in this batch"},
+        "timestamp": {"type": "number", "description": "Timestamp when samples were collected"},
+        "duration": {"type": "number", "description": "Duration of the sampling window in milliseconds"},
+    }
+    __refs__ = set()
+
+    __slots__ = list(__props__.keys()) + ["kwargs"]
+
+    def __init__(self, newFrames, samples, sampleCount, timestamp, duration, update_ids_from_dap=False, **kwargs):  # noqa (update_ids_from_dap may be unused)
+        """
+        :param object newFrames: New stack frames in this batch. Dictionary mapping frame ID to frame data.
+        :param array samples: Array of stack trace samples. Each sample is an array of frame IDs.
+        :param integer sampleCount: Number of samples in this batch
+        :param number timestamp: Timestamp when samples were collected
+        :param number duration: Duration of the sampling window in milliseconds
+        """
+        self.newFrames = newFrames
+        self.samples = samples
+        self.sampleCount = sampleCount
+        self.timestamp = timestamp
+        self.duration = duration
+        self.kwargs = kwargs
+
+    def to_dict(self, update_ids_to_dap=False):  # noqa (update_ids_to_dap may be unused)
+        newFrames = self.newFrames
+        samples = self.samples
+        sampleCount = self.sampleCount
+        timestamp = self.timestamp
+        duration = self.duration
+        dct = {"newFrames": newFrames, "samples": samples, "sampleCount": sampleCount, "timestamp": timestamp, "duration": duration}
+        dct.update(self.kwargs)
+        return dct

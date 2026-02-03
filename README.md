@@ -116,3 +116,18 @@ debugpy.listen(...)
 In both cases, the environment variable `DEBUGPY_LOG_DIR` can also be set to the same effect.
 
 When logging is enabled, debugpy will create several log files with names matching `debugpy*.log` in the specified directory, corresponding to different components of the debugger. When subprocess debugging is enabled, separate logs are created for every subprocess.
+
+
+## Features
+
+### Profiling Support
+
+debugpy includes live profiling support that allows you to profile Python applications during debug sessions. See [doc/PROFILING.md](doc/PROFILING.md) for details on the implementation.
+
+For information about integrating profiling into the VSCode Python extension, see [VSCODE_INTEGRATION.md](VSCODE_INTEGRATION.md).
+
+---
+
+More information about `debugpy` can be found on [its homepage](https://aka.ms/debugpy) and [its wiki](https://github.com/microsoft/debugpy/wiki).
+
+Issues and questions related to debugpy should be filed at https://github.com/microsoft/debugpy/issues.

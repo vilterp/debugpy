@@ -662,6 +662,40 @@ class Client(components.Component):
         return result
 
     @message_handler
+    def startProfiling_request(self, request):
+        """
+        Handle startProfiling request from the IDE.
+        Delegates to the server to start profiling the debugged process.
+        """
+        if not self.server:
+            return {"status": "error", "message": "No server connection"}
+        
+        try:
+            # Delegate the request to the server (pydevd)
+            response = self.server.channel.request("pydevdStartProfiling", request.arguments)
+            return response
+        except Exception as e:
+            log.exception("Error starting profiling: {0}", e)
+            return {"status": "error", "message": str(e)}
+    
+    @message_handler
+    def stopProfiling_request(self, request):
+        """
+        Handle stopProfiling request from the IDE.
+        Delegates to the server to stop profiling the debugged process.
+        """
+        if not self.server:
+            return {"status": "error", "message": "No server connection"}
+        
+        try:
+            # Delegate the request to the server (pydevd)
+            response = self.server.channel.request("pydevdStopProfiling", request.arguments)
+            return response
+        except Exception as e:
+            log.exception("Error stopping profiling: {0}", e)
+            return {"status": "error", "message": str(e)}
+
+    @message_handler
     def terminate_request(self, request):
         # If user specifically requests to terminate, it means that they don't want
         # debug session auto-restart kicking in.
