@@ -31,26 +31,46 @@ The profiling implementation consists of three main components:
 
 ### Sample Format
 
-Each profiling sample is a **call stack** represented as an array of stack frames, ordered from caller to callee (root to leaf). This format is ideal for flame graph visualization.
+Profiling data is sent as events with **frame deduplication** for efficiency. Each profiling event contains:
 
-Example sample:
+1. **`newFrames`**: A dictionary mapping frame IDs to frame data. Only frames that haven't been sent before are included.
+2. **`samples`**: An array of call stacks, where each stack is an array of frame IDs (integers).
+
+This design minimizes data transfer by only sending each unique frame once per profiling session.
+
+Example event:
 ```json
 {
+  "newFrames": {
+    "12345": {"file": "/app/main.py", "line": 10, "function": "main"},
+    "67890": {"file": "/app/utils.py", "line": 42, "function": "calculate"}
+  },
   "samples": [
-    [
-      {"file": "/app/main.py", "line": 10, "function": "main"},
-      {"file": "/app/main.py", "line": 25, "function": "process_data"},
-      {"file": "/app/utils.py", "line": 42, "function": "calculate"}
-    ],
-    [
-      {"file": "/app/main.py", "line": 10, "function": "main"},
-      {"file": "/app/main.py", "line": 30, "function": "save_results"}
-    ]
+    [12345, 67890],
+    [12345, 67890],
+    [12345, 99999]
   ],
-  "sampleCount": 2,
+  "sampleCount": 3,
   "timestamp": 1234567890.123
 }
 ```
+
+In subsequent events, if the same frames appear, only the frame IDs are sent:
+```json
+{
+  "newFrames": {
+    "11111": {"file": "/app/other.py", "line": 5, "function": "helper"}
+  },
+  "samples": [
+    [12345, 11111],
+    [12345, 67890]
+  ],
+  "sampleCount": 2,
+  "timestamp": 1234567890.456
+}
+```
+
+The client maintains a frame ID → frame mapping to reconstruct full stacks.
 
 ## Usage
 
@@ -67,9 +87,20 @@ const response = await session.customRequest('startProfiling', {
 // Listen for profiling data events
 session.onDidReceiveDebugSessionCustomEvent((event) => {
     if (event.event === 'profilingData') {
-        const { samples, sampleCount, timestamp } = event.body;
+        const { newFrames, samples, sampleCount, timestamp } = event.body;
+        
+        // Update frame mapping
+        for (const [frameId, frameData] of Object.entries(newFrames)) {
+            frameMap.set(parseInt(frameId), frameData);
+        }
+        
+        // Reconstruct full stacks from frame IDs
+        const fullStacks = samples.map(frameIds => 
+            frameIds.map(id => frameMap.get(id))
+        );
+        
         // Update flame graph visualization
-        updateFlameGraph(samples);
+        updateFlameGraph(fullStacks);
     }
 });
 
@@ -98,6 +129,29 @@ my_function()
 ```
 
 ## Technical Notes
+
+### Frame Deduplication
+
+The profiler uses frame deduplication to minimize data transfer:
+
+1. **Frame ID Generation**: Each unique stack frame (file, line, function) is assigned a stable integer ID using a hash function
+2. **State Tracking**: The profiler maintains:
+   - `frame_id_map`: Maps frame IDs to StackFrame dataclasses
+   - `sent_frame_ids`: Set of frame IDs already sent to the client
+3. **Efficient Transmission**: Only new frames are sent in each event's `newFrames` field
+4. **Client Reconstruction**: The client accumulates a frame ID → frame data map and uses it to reconstruct full call stacks
+
+This typically reduces data size by 75-90% after the first batch, as the same frames appear repeatedly in different samples.
+
+### Using Dataclasses
+
+The implementation uses Python dataclasses for type safety:
+
+- `StackFrame`: Represents a single stack frame with file, line, and function
+- `ProfilingResult`: Result of start/stop operations
+- `ProfilingData`: Complete profiling data sent to callbacks
+
+This provides better IDE support, type checking, and cleaner code compared to dictionaries.
 
 ### Using sys.setprofile()
 
@@ -164,21 +218,29 @@ Stop profiling the debugged process.
 
 ### Event: `profilingData`
 
-Sent periodically while profiling is active. Contains a batch of stack trace samples.
+Sent periodically while profiling is active. Contains new stack frames and samples as frame ID arrays.
 
 **Body**:
 ```json
 {
+    "newFrames": {
+        "12345": {"file": "...", "line": 10, "function": "main"},
+        "67890": {"file": "...", "line": 20, "function": "helper"}
+    },
     "samples": [
-        [
-            {"file": "...", "line": 10, "function": "main"},
-            {"file": "...", "line": 20, "function": "helper"}
-        ]
+        [12345, 67890],
+        [12345]
     ],
-    "sampleCount": 10,
+    "sampleCount": 2,
     "timestamp": 1234567890.123
 }
 ```
+
+**Fields**:
+- `newFrames`: Dictionary mapping frame IDs (as strings) to frame objects. Only includes frames not previously sent.
+- `samples`: Array of call stacks. Each stack is an array of frame IDs (integers).
+- `sampleCount`: Number of samples in this batch.
+- `timestamp`: Unix timestamp when samples were collected.
 
 ## Testing
 

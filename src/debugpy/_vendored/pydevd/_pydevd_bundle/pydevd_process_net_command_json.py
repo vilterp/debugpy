@@ -1367,13 +1367,25 @@ class PyDevJsonCommandProcessor(object):
             sample_interval = getattr(args, 'sampleInterval', 1.0)
             
             # Set up callback to send profiling data events
-            def on_profiling_data(data):
+            def on_profiling_data(profiling_data):
                 try:
-                    # Send profiling data event to client
+                    # Convert ProfilingData dataclass to dict format for DAP
+                    # Convert StackFrame dataclasses to dicts for newFrames
+                    new_frames_dict = {
+                        frame_id: {
+                            "file": frame.file,
+                            "line": frame.line,
+                            "function": frame.function
+                        }
+                        for frame_id, frame in profiling_data.newFrames.items()
+                    }
+                    
+                    # Send profiling data event to client with frame deduplication
                     event_body = {
-                        "samples": data.get("samples", []),
-                        "sampleCount": data.get("sampleCount", 0),
-                        "timestamp": data.get("timestamp", 0),
+                        "newFrames": new_frames_dict,
+                        "samples": profiling_data.samples,
+                        "sampleCount": profiling_data.sampleCount,
+                        "timestamp": profiling_data.timestamp,
                     }
                     event = pydevd_schema.PydevdProfilingDataEvent(body=event_body)
                     cmd = NetCommand(CMD_RETURN, 0, event, is_json=True)
@@ -1386,7 +1398,8 @@ class PyDevJsonCommandProcessor(object):
                 on_data_callback=on_profiling_data
             )
             
-            body = {"status": result.get("status", "started")}
+            # Convert ProfilingResult dataclass to dict
+            body = {"status": result.status}
             response = pydevd_base_schema.build_response(request, kwargs={"body": body})
             return NetCommand(CMD_RETURN, 0, response, is_json=True)
             
@@ -1414,9 +1427,10 @@ class PyDevJsonCommandProcessor(object):
             
             result = profiling.stop_profiling()
             
+            # Convert ProfilingResult dataclass to dict
             body = {
-                "status": result.get("status", "stopped"),
-                "finalStats": result.get("finalStats", {})
+                "status": result.status,
+                "finalStats": result.finalStats or {}
             }
             response = pydevd_base_schema.build_response(request, kwargs={"body": body})
             return NetCommand(CMD_RETURN, 0, response, is_json=True)

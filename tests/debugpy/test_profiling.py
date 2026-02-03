@@ -144,28 +144,41 @@ def test_profiling_data_format(pyfile, target, run):
         assert "body" in profiling_event
         
         body = profiling_event.body
+        assert "newFrames" in body
         assert "samples" in body
         assert "sampleCount" in body
         assert "timestamp" in body
         
-        # Verify samples is an array
+        # Verify newFrames is a dict mapping frame IDs to frame data
+        new_frames = body["newFrames"]
+        assert isinstance(new_frames, dict)
+        
+        # Verify samples is an array of arrays of integers (frame IDs)
         samples = body["samples"]
         assert isinstance(samples, list)
         assert body["sampleCount"] == len(samples)
         
-        # If we got samples, verify each sample is a stack (array of frames)
+        # If we got samples, verify each sample is an array of frame IDs
         if len(samples) > 0:
             sample = samples[0]
-            assert isinstance(sample, list), "Each sample should be a stack (array of frames)"
+            assert isinstance(sample, list), "Each sample should be an array of frame IDs"
+            assert all(isinstance(frame_id, int) for frame_id in sample), "Each frame ID should be an integer"
             
-            # Verify each frame has the required fields
-            if len(sample) > 0:
-                frame = sample[0]
-                assert isinstance(frame, dict)
-                assert "file" in frame
-                assert "line" in frame
-                assert "function" in frame
-                log.info("Sample frame structure verified: {0}", frame)
+            # Verify that frame IDs in samples refer to frames in newFrames (for first batch)
+            # or were sent in previous batches
+            if len(new_frames) > 0:
+                # At least some frame IDs should be in newFrames for the first event
+                frame_id = sample[0]
+                log.info("First sample frame ID: {0}, newFrames keys: {1}", frame_id, list(new_frames.keys()))
+                
+                # Verify frame structure if we have new frames
+                if frame_id in new_frames:
+                    frame = new_frames[frame_id]
+                    assert isinstance(frame, dict)
+                    assert "file" in frame
+                    assert "line" in frame
+                    assert "function" in frame
+                    log.info("Sample frame structure verified: {0}", frame)
 
         # Wait for program to finish
         session.wait_for_stop(

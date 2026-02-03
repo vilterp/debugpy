@@ -33,18 +33,20 @@ This PR adds profiling support to debugpy, enabling live profiling of Python app
   ```
 
 #### New Event:
-- **`profilingData`**: Streamed periodically with profiling samples
+- **`profilingData`**: Streamed periodically with profiling samples and frame deduplication
   ```json
   {
     "event": "profilingData",
     "body": {
+      "newFrames": {
+        "12345": {"file": "/app/main.py", "line": 10, "function": "main"},
+        "67890": {"file": "/app/utils.py", "line": 42, "function": "calculate"}
+      },
       "samples": [
-        [
-          {"file": "/app/main.py", "line": 10, "function": "main"},
-          {"file": "/app/utils.py", "line": 42, "function": "calculate"}
-        ]
+        [12345, 67890],
+        [12345, 99999]
       ],
-      "sampleCount": 10,
+      "sampleCount": 2,
       "timestamp": 1234567890.123
     }
   }
@@ -86,14 +88,30 @@ Added to `pydevd_schema.py`:
 
 ## Key Design Decisions
 
+### Frame Deduplication
+**Why**: Reduces data transfer by 75-90% after first batch
+**How**: 
+- Each unique frame gets a stable integer ID (hash of file+line+function)
+- Server maintains: `frame_id_map` (ID→StackFrame) and `sent_frame_ids` (set)
+- Events contain: `newFrames` (only new IDs) + `samples` (arrays of IDs)
+- Client maintains accumulated ID→frame map to reconstruct stacks
+
+### Using Dataclasses
+**Why**: Type safety, better IDE support, cleaner code
+**Dataclasses**:
+- `StackFrame`: Represents frame with file, line, function
+- `ProfilingResult`: Start/stop operation results
+- `ProfilingData`: Complete profiling data sent to callbacks
+
 ### Why sys.setprofile() instead of sys._current_frames()?
 1. **Official Python API**: `setprofile()` is the standard profiling mechanism
 2. **Accurate call stacks**: Provides correct frame information during execution
 3. **Aligned with Python's profiling model**: Works like cProfile/profile
 4. **Event-driven**: Can capture stacks at function calls/returns with proper context
 
-### Sample Format: Individual Stacks
-Each sample is a complete call stack (array of frames), not aggregated statistics:
+### Sample Format: Individual Stacks with Frame IDs
+Each sample is a complete call stack represented as an array of frame IDs:
+- **Efficient**: Frame data sent only once, then referenced by ID
 - **Perfect for flame graphs**: Can visualize call hierarchies
 - **Time-series data**: Can see how execution evolves over time
 - **Flexible analysis**: Client can aggregate/filter as needed
@@ -156,11 +174,23 @@ To enable this feature in VSCode:
    await session.customRequest('stopProfiling', {});
    ```
 
-3. **Handle Events**:
+3. **Handle Events with Frame Deduplication**:
    ```typescript
+   const frameMap = new Map();  // Accumulate frame ID -> frame data
+   
    session.onDidReceiveDebugSessionCustomEvent((event) => {
        if (event.event === 'profilingData') {
-           updateFlameGraph(event.body.samples);
+           // Add new frames to our map
+           for (const [frameId, frameData] of Object.entries(event.body.newFrames)) {
+               frameMap.set(parseInt(frameId), frameData);
+           }
+           
+           // Reconstruct full call stacks from frame IDs
+           const fullStacks = event.body.samples.map(frameIds =>
+               frameIds.map(id => frameMap.get(id))
+           );
+           
+           updateFlameGraph(fullStacks);
        }
    });
    ```

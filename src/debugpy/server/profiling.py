@@ -15,21 +15,50 @@ Each sample is a stack trace (array of stack frames) captured at a point in time
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from typing import Optional, Callable, Dict, Any, List
 
 from debugpy.common import log
 
 
+@dataclass
+class StackFrame:
+    """Represents a single stack frame in a call stack."""
+    file: str
+    line: int
+    function: str
+    
+    def __hash__(self):
+        """Make StackFrame hashable for use as dict keys."""
+        return hash((self.file, self.line, self.function))
+
+
+@dataclass
+class ProfilingResult:
+    """Result of start/stop profiling operations."""
+    status: str
+    finalStats: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class ProfilingData:
+    """Profiling data sent to the client."""
+    newFrames: Dict[int, StackFrame]  # frame_id -> StackFrame
+    samples: List[List[int]]  # List of stacks, each stack is list of frame IDs
+    sampleCount: int
+    timestamp: float
+
+
 class Profiler:
     """Manages sampling profiling for the debugged process using sys.setprofile()."""
 
-    def __init__(self, on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = None):
+    def __init__(self, on_data_callback: Optional[Callable[[ProfilingData], None]] = None):
         """
         Initialize the profiler.
         
         Args:
             on_data_callback: Optional callback to invoke with profiling data.
-                             Called with a dictionary containing stack trace samples.
+                             Called with a ProfilingData instance.
         """
         self._is_profiling = False
         self._lock = threading.RLock()
@@ -37,12 +66,17 @@ class Profiler:
         self._sample_thread: Optional[threading.Thread] = None
         self._should_stop = threading.Event()
         self._sample_interval = 0.01  # Sample every 10ms by default for live updates
-        self._samples_buffer: List[List[Dict[str, Any]]] = []
+        self._samples_buffer: List[List[int]] = []  # Now stores frame IDs instead of frame dicts
         self._batch_size = 10  # Send samples in batches
         self._last_sample_time = 0
         self._current_frame = None  # Track the current frame for profiling
         
-    def start(self, sample_interval: float = 0.01) -> Dict[str, Any]:
+        # Frame deduplication state
+        self._frame_id_map: Dict[int, StackFrame] = {}  # frame_id -> StackFrame
+        self._sent_frame_ids: set = set()  # Track which frames have been sent to client
+        self._next_frame_id = 1  # Counter for generating unique frame IDs
+        
+    def start(self, sample_interval: float = 0.01) -> ProfilingResult:
         """
         Start profiling using sys.setprofile().
         
@@ -50,12 +84,12 @@ class Profiler:
             sample_interval: How often to capture stack samples (in seconds, default 0.01 = 10ms)
             
         Returns:
-            Dictionary with status information
+            ProfilingResult with status information
         """
         with self._lock:
             if self._is_profiling:
                 log.warning("Profiler is already running")
-                return {"status": "already_running"}
+                return ProfilingResult(status="already_running")
             
             log.info("Starting profiler with sample interval: {0}s", sample_interval)
             self._sample_interval = sample_interval
@@ -63,6 +97,11 @@ class Profiler:
             self._should_stop.clear()
             self._samples_buffer = []
             self._last_sample_time = time.time()
+            
+            # Reset frame deduplication state when starting a new profiling session
+            self._frame_id_map = {}
+            self._sent_frame_ids = set()
+            self._next_frame_id = 1
             
             # Install the profile function on the main thread
             # This will be called on every function call/return/exception
@@ -76,19 +115,19 @@ class Profiler:
             )
             self._sample_thread.start()
             
-            return {"status": "started"}
+            return ProfilingResult(status="started")
     
-    def stop(self) -> Dict[str, Any]:
+    def stop(self) -> ProfilingResult:
         """
         Stop profiling and return summary.
         
         Returns:
-            Dictionary with profiling summary
+            ProfilingResult with profiling summary
         """
         with self._lock:
             if not self._is_profiling:
                 log.warning("Profiler is not running")
-                return {"status": "not_running"}
+                return ProfilingResult(status="not_running")
             
             log.info("Stopping profiler")
             self._should_stop.set()
@@ -114,12 +153,10 @@ class Profiler:
             self._sample_thread = None
             self._samples_buffer = []
             
-            return {
-                "status": "stopped",
-                "finalStats": {
-                    "totalSamples": sample_count
-                }
-            }
+            return ProfilingResult(
+                status="stopped",
+                finalStats={"totalSamples": sample_count}
+            )
     
     def is_profiling(self) -> bool:
         """Check if profiling is currently active."""
@@ -169,19 +206,18 @@ class Profiler:
             except Exception as e:
                 log.exception("Error in send loop: {0}", e)
     
-    def _capture_stack_from_frame(self, frame) -> Optional[List[Dict[str, Any]]]:
+    def _capture_stack_from_frame(self, frame) -> Optional[List[int]]:
         """
-        Capture the call stack from a frame object.
+        Capture the call stack from a frame object and return as frame IDs.
         
         Args:
             frame: The frame to start from
             
         Returns:
-            List of stack frames (top to bottom - caller to callee), or None if capture failed.
-            Each frame is a dict with: file, line, function
+            List of frame IDs (top to bottom - caller to callee), or None if capture failed.
         """
         try:
-            stack = []
+            stack_ids = []
             current_frame = frame
             
             # Walk up the stack (from current to caller)
@@ -193,22 +229,47 @@ class Profiler:
                 
                 # Skip debugpy internal frames to reduce noise
                 if not self._should_skip_frame(filename):
-                    stack.append({
-                        "file": filename,
-                        "line": line,
-                        "function": func_name,
-                    })
+                    # Get or create frame ID
+                    frame_id = self._get_or_create_frame_id(filename, line, func_name)
+                    stack_ids.append(frame_id)
                 
                 current_frame = current_frame.f_back
             
             # Reverse to get caller-to-callee order (root to leaf)
-            stack.reverse()
+            stack_ids.reverse()
             
-            return stack if stack else None
+            return stack_ids if stack_ids else None
             
         except Exception as e:
             log.exception("Error capturing stack from frame: {0}", e)
             return None
+    
+    def _get_or_create_frame_id(self, filename: str, line: int, func_name: str) -> int:
+        """
+        Get or create a frame ID for the given frame data.
+        
+        Args:
+            filename: Source file name
+            line: Line number
+            func_name: Function name
+            
+        Returns:
+            Frame ID (integer)
+        """
+        # Create a StackFrame instance
+        frame = StackFrame(file=filename, line=line, function=func_name)
+        
+        # Use the frame's hash as its ID
+        frame_id = hash(frame)
+        
+        # Check if we've seen this frame before
+        if frame_id in self._frame_id_map:
+            return frame_id
+        
+        # New frame - add to map
+        self._frame_id_map[frame_id] = frame
+        
+        return frame_id
     
     def _should_skip_frame(self, filename: str) -> bool:
         """
@@ -235,23 +296,35 @@ class Profiler:
         
         return False
     
-    def _send_samples(self, samples: List[List[Dict[str, Any]]]):
+    def _send_samples(self, samples: List[List[int]]):
         """
-        Send a batch of samples to the callback.
+        Send a batch of samples to the callback with frame deduplication.
         
         Args:
-            samples: List of stack traces to send
+            samples: List of stack traces (each is a list of frame IDs)
         """
         if not self._on_data_callback or not samples:
             return
         
         try:
-            data = {
-                "samples": samples,
-                "sampleCount": len(samples),
-                "timestamp": time.time()
-            }
-            self._on_data_callback(data)
+            # Determine which frames in this batch are new (haven't been sent yet)
+            new_frames: Dict[int, StackFrame] = {}
+            for sample in samples:
+                for frame_id in sample:
+                    if frame_id not in self._sent_frame_ids:
+                        # This frame hasn't been sent to the client yet
+                        new_frames[frame_id] = self._frame_id_map[frame_id]
+                        self._sent_frame_ids.add(frame_id)
+            
+            # Create ProfilingData instance
+            profiling_data = ProfilingData(
+                newFrames=new_frames,
+                samples=samples,
+                sampleCount=len(samples),
+                timestamp=time.time()
+            )
+            
+            self._on_data_callback(profiling_data)
         except Exception as e:
             log.exception("Error sending samples: {0}", e)
 
@@ -261,7 +334,7 @@ _profiler: Optional[Profiler] = None
 _profiler_lock = threading.RLock()
 
 
-def get_profiler(on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Profiler:
+def get_profiler(on_data_callback: Optional[Callable[[ProfilingData], None]] = None) -> Profiler:
     """
     Get or create the global profiler instance.
     
@@ -282,8 +355,8 @@ def get_profiler(on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = 
 
 
 def start_profiling(sample_interval: float = 0.01,
-                    on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = None
-                    ) -> Dict[str, Any]:
+                    on_data_callback: Optional[Callable[[ProfilingData], None]] = None
+                    ) -> ProfilingResult:
     """
     Start profiling the current process using sys.setprofile().
     
@@ -292,18 +365,18 @@ def start_profiling(sample_interval: float = 0.01,
         on_data_callback: Optional callback to invoke with profiling data
         
     Returns:
-        Dictionary with status information
+        ProfilingResult with status information
     """
     profiler = get_profiler(on_data_callback)
     return profiler.start(sample_interval)
 
 
-def stop_profiling() -> Dict[str, Any]:
+def stop_profiling() -> ProfilingResult:
     """
     Stop profiling the current process.
     
     Returns:
-        Dictionary with final profiling statistics
+        ProfilingResult with final profiling statistics
     """
     profiler = get_profiler()
     return profiler.stop()
