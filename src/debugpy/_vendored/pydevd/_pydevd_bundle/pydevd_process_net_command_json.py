@@ -1352,3 +1352,83 @@ class PyDevJsonCommandProcessor(object):
 
         response = pydevd_base_schema.build_response(request)
         return NetCommand(CMD_RETURN, 0, response, is_json=True)
+
+    def on_pydevdstartprofiling_request(self, py_db, request):
+        """
+        Handle startProfiling request from the client.
+        
+        :param PydevdStartProfilingRequest request:
+        """
+        try:
+            # Import profiling module here to avoid circular imports
+            from debugpy.server import profiling
+            
+            args = request.arguments  # : :type args: PydevdStartProfilingArguments
+            sample_interval = getattr(args, 'sampleInterval', 1.0)
+            
+            # Set up callback to send profiling data events
+            def on_profiling_data(data):
+                try:
+                    # Send profiling data event to client
+                    event_body = {
+                        "samples": data.get("samples", []),
+                        "sampleCount": data.get("sampleCount", 0),
+                        "timestamp": data.get("timestamp", 0),
+                    }
+                    event = pydevd_schema.PydevdProfilingDataEvent(body=event_body)
+                    cmd = NetCommand(CMD_RETURN, 0, event, is_json=True)
+                    py_db.writer.add_command(cmd)
+                except Exception as e:
+                    pydev_log.exception("Error sending profiling data event: %s", e)
+            
+            result = profiling.start_profiling(
+                sample_interval=sample_interval,
+                on_data_callback=on_profiling_data
+            )
+            
+            body = {"status": result.get("status", "started")}
+            response = pydevd_base_schema.build_response(request, kwargs={"body": body})
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)
+            
+        except Exception as e:
+            pydev_log.exception("Error starting profiling: %s", e)
+            response = pydevd_base_schema.build_response(
+                request,
+                kwargs={
+                    "body": {"status": "error"},
+                    "success": False,
+                    "message": str(e),
+                },
+            )
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)
+    
+    def on_pydevdstopprofiling_request(self, py_db, request):
+        """
+        Handle stopProfiling request from the client.
+        
+        :param PydevdStopProfilingRequest request:
+        """
+        try:
+            # Import profiling module here to avoid circular imports
+            from debugpy.server import profiling
+            
+            result = profiling.stop_profiling()
+            
+            body = {
+                "status": result.get("status", "stopped"),
+                "finalStats": result.get("finalStats", {})
+            }
+            response = pydevd_base_schema.build_response(request, kwargs={"body": body})
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)
+            
+        except Exception as e:
+            pydev_log.exception("Error stopping profiling: %s", e)
+            response = pydevd_base_schema.build_response(
+                request,
+                kwargs={
+                    "body": {"status": "error", "finalStats": {}},
+                    "success": False,
+                    "message": str(e),
+                },
+            )
+            return NetCommand(CMD_RETURN, 0, response, is_json=True)

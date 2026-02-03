@@ -356,6 +356,18 @@ class Server(components.Component):
         # Do not propagate this, since we'll report our own.
         self.channel.close()
 
+    @message_handler
+    def pydevdprofilingdata_event(self, event):
+        """
+        Forward profiling data events from the server to the client.
+        These events contain stack trace samples for live flame graph rendering.
+        """
+        # Convert the pydevd event to a debugpy event that the client expects
+        self.client.channel.send_event(
+            "profilingData",
+            event.body
+        )
+
     def detach_from_session(self):
         with _lock:
             self.is_connected = False
