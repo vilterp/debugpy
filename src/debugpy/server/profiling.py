@@ -8,6 +8,7 @@ Profiling support for debugpy.
 This module provides profiling capabilities that can be started/stopped
 during a debug session and streams profiling samples back to the client.
 
+Uses Python's sys.setprofile() to capture accurate call stacks at regular intervals.
 Each sample is a stack trace (array of stack frames) captured at a point in time.
 """
 
@@ -21,7 +22,7 @@ from debugpy.common import log
 
 
 class Profiler:
-    """Manages sampling profiling for the debugged process."""
+    """Manages sampling profiling for the debugged process using sys.setprofile()."""
 
     def __init__(self, on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = None):
         """
@@ -37,16 +38,17 @@ class Profiler:
         self._sample_thread: Optional[threading.Thread] = None
         self._should_stop = threading.Event()
         self._sample_interval = 0.01  # Sample every 10ms by default for live updates
-        self._main_thread_id = threading.main_thread().ident
         self._samples_buffer: List[List[Dict[str, Any]]] = []
         self._batch_size = 10  # Send samples in batches
+        self._last_sample_time = 0
+        self._current_frame = None  # Track the current frame for profiling
         
     def start(self, sample_interval: float = 0.01) -> Dict[str, Any]:
         """
-        Start profiling.
+        Start profiling using sys.setprofile().
         
         Args:
-            sample_interval: How often to sample stack traces (in seconds, default 0.01 = 10ms)
+            sample_interval: How often to capture stack samples (in seconds, default 0.01 = 10ms)
             
         Returns:
             Dictionary with status information
@@ -61,11 +63,16 @@ class Profiler:
             self._is_profiling = True
             self._should_stop.clear()
             self._samples_buffer = []
+            self._last_sample_time = time.time()
             
-            # Start background thread to periodically collect and send samples
+            # Install the profile function on the main thread
+            # This will be called on every function call/return/exception
+            sys.setprofile(self._profile_func)
+            
+            # Start background thread to periodically send batched samples
             self._sample_thread = threading.Thread(
-                target=self._sample_loop,
-                name="debugpy-profiler-sampler",
+                target=self._send_loop,
+                name="debugpy-profiler-sender",
                 daemon=True
             )
             self._sample_thread.start()
@@ -88,7 +95,10 @@ class Profiler:
             self._should_stop.set()
             self._is_profiling = False
             
-            # Wait for sample thread to finish
+            # Uninstall the profile function
+            sys.setprofile(None)
+            
+            # Wait for send thread to finish
             if self._sample_thread and self._sample_thread.is_alive():
                 self._sample_thread.join(timeout=2.0)
             
@@ -117,51 +127,69 @@ class Profiler:
         with self._lock:
             return self._is_profiling
     
-    def _sample_loop(self):
-        """Background thread that periodically samples stack traces from all threads."""
-        while not self._should_stop.wait(self._sample_interval):
+    def _profile_func(self, frame, event, arg):
+        """
+        Profile function called by sys.setprofile() on function calls/returns.
+        
+        Args:
+            frame: The current frame being executed
+            event: 'call', 'return', 'c_call', 'c_return', 'c_exception', or 'exception'
+            arg: Depends on event type
+        """
+        if not self._is_profiling:
+            return
+        
+        # Sample at regular intervals based on time
+        current_time = time.time()
+        if current_time - self._last_sample_time >= self._sample_interval:
+            self._last_sample_time = current_time
+            
             try:
-                # Capture stack traces from all threads
-                stack_sample = self._capture_stack_sample()
+                # Capture the call stack from this frame
+                stack = self._capture_stack_from_frame(frame)
                 
-                if stack_sample:
+                if stack:
                     with self._lock:
-                        self._samples_buffer.append(stack_sample)
+                        self._samples_buffer.append(stack)
                         
-                        # Send samples in batches to avoid too many events
-                        if len(self._samples_buffer) >= self._batch_size:
-                            if self._on_data_callback:
-                                self._send_samples(self._samples_buffer)
-                            self._samples_buffer = []
+            except Exception as e:
+                log.exception("Error capturing stack sample: {0}", e)
+    
+    def _send_loop(self):
+        """Background thread that periodically sends batched samples."""
+        while not self._should_stop.wait(self._sample_interval * self._batch_size):
+            try:
+                with self._lock:
+                    if len(self._samples_buffer) >= self._batch_size:
+                        samples_to_send = self._samples_buffer[:self._batch_size]
+                        self._samples_buffer = self._samples_buffer[self._batch_size:]
+                        
+                        if self._on_data_callback:
+                            self._send_samples(samples_to_send)
                             
             except Exception as e:
-                log.exception("Error sampling stack trace: {0}", e)
+                log.exception("Error in send loop: {0}", e)
     
-    def _capture_stack_sample(self) -> Optional[List[Dict[str, Any]]]:
+    def _capture_stack_from_frame(self, frame) -> Optional[List[Dict[str, Any]]]:
         """
-        Capture the current stack trace from the main thread.
+        Capture the call stack from a frame object.
         
+        Args:
+            frame: The frame to start from
+            
         Returns:
-            List of stack frames (bottom to top), or None if capture failed.
-            Each frame is a dict with: file, line, function, code
+            List of stack frames (top to bottom - caller to callee), or None if capture failed.
+            Each frame is a dict with: file, line, function
         """
         try:
-            # Get all thread frames
-            all_frames = sys._current_frames()
-            
-            # Focus on main thread for now (can be extended to all threads)
-            if self._main_thread_id not in all_frames:
-                return None
-            
-            frame = all_frames[self._main_thread_id]
-            
-            # Build stack trace from bottom (oldest) to top (newest)
             stack = []
-            while frame is not None:
-                # Extract frame information
-                code = frame.f_code
+            current_frame = frame
+            
+            # Walk up the stack (from current to caller)
+            while current_frame is not None:
+                code = current_frame.f_code
                 filename = code.co_filename
-                line = frame.f_lineno
+                line = current_frame.f_lineno
                 func_name = code.co_name
                 
                 # Skip debugpy internal frames to reduce noise
@@ -172,15 +200,15 @@ class Profiler:
                         "function": func_name,
                     })
                 
-                frame = frame.f_back
+                current_frame = current_frame.f_back
             
-            # Reverse to get top-to-bottom order (caller to callee)
+            # Reverse to get caller-to-callee order (root to leaf)
             stack.reverse()
             
             return stack if stack else None
             
         except Exception as e:
-            log.exception("Error capturing stack sample: {0}", e)
+            log.exception("Error capturing stack from frame: {0}", e)
             return None
     
     def _should_skip_frame(self, filename: str) -> bool:
@@ -257,10 +285,10 @@ def get_profiler(on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = 
 def start_profiling(sample_interval: float = 0.01, 
                    on_data_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, Any]:
     """
-    Start profiling the current process.
+    Start profiling the current process using sys.setprofile().
     
     Args:
-        sample_interval: How often to sample stack traces (in seconds, default 0.01 = 10ms)
+        sample_interval: How often to capture stack samples (in seconds, default 0.01 = 10ms)
         on_data_callback: Optional callback to invoke with profiling data
         
     Returns:
